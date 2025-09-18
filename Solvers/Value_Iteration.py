@@ -63,6 +63,9 @@ class ValueIteration(AbstractSolver):
         """
 
         # you can add variables here if it is helpful
+                
+        # A new value function to prevent in-place updates during the sweep
+        V_new = np.copy(self.V)
 
         # Update the estimated value of each state
         for each_state in range(self.env.observation_space.n):
@@ -71,6 +74,11 @@ class ValueIteration(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            action_values = self.one_step_lookahead(each_state)
+            V_new[each_state] = np.max(action_values)
+
+        # Update the class's value function with the new values
+        self.V = V_new
 
         # Dont worry about this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
@@ -140,7 +148,8 @@ class ValueIteration(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            
+            action_values = self.one_step_lookahead(state)
+            return np.argmax(action_values)
 
         return policy_fn
 
@@ -192,6 +201,24 @@ class AsynchVI(ValueIteration):
         # Do a one-step lookahead to find the best action       #
         # Update the value function. Ref: Sutton book eq. 4.10. #
         #########################################################
+        if self.pq.isEmpty():
+            return
+
+        state = self.pq.pop()
+        old_value = self.V[state]
+        best_action_value = np.max(self.one_step_lookahead(state))
+        self.V[state] = best_action_value
+
+        delta = abs(old_value - best_action_value)
+        # If the value changed, update the priority of its predecessors
+        if delta > 0:
+            if state in self.pred:
+                for predecessor in self.pred[state]:
+                    pred_best_val = np.max(self.one_step_lookahead(predecessor))
+                    priority = -abs(self.V[predecessor] - pred_best_val)
+                    self.pq.update(predecessor, priority)
+
+
 
         # you can ignore this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
