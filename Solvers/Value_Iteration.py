@@ -10,7 +10,62 @@ import numpy as np
 import heapq
 from Solvers.Abstract_Solver import AbstractSolver, Statistics
 
-
+# ==========================================================================================
+# AI-GENERATED CODE ATTRIBUTION
+# The implementation of the `ValueIteration`, `AsynchVI`, and `create_greedy_policy`
+# methods was completed with the assistance of an AI tool (T3 Chat, powered by Gemini 2.5 Pro).
+# In accordance with course policy, the prompt and the significant parts of the
+# AI's response are documented below.
+#
+# --- PROMPT ---
+# The user provided a skeleton Python file for a reinforcement learning assignment
+# and an image containing the pseudocode for the Value Iteration algorithm. The initial
+# request was to implement the `train_episode` and `create_greedy_policy` methods
+# in the `ValueIteration` class, as well as the `train_episode` method in the `AsynchVI`
+# class, based on the provided skeleton and comments.
+#
+# A follow-up prompt included failing autograder output. The autograder indicated that the
+# initial implementation of `ValueIteration.train_episode` was incorrect. The error was
+# diagnosed as using a synchronous update (with a temporary `V_new` array) when the
+# tests expected an asynchronous, in-place update. The final request was to provide the
+# corrected code for the method that performs an in-place update to pass the tests.
+#
+# --- SIGNIFICANT AI-GENERATED RESPONSE ---
+# The AI provided the implementation for the following methods. The most critical
+# correction was for `ValueIteration.train_episode` to pass the autograder tests.
+#
+# 1. Corrected `train_episode` in `ValueIteration` class (in-place update):
+#
+#    def train_episode(self):
+#        for each_state in range(self.env.observation_space.n):
+#            action_values = self.one_step_lookahead(each_state)
+#            self.V[each_state] = np.max(action_values)
+#
+# 2. Implemented `policy_fn` in `create_greedy_policy` method:
+#
+#    def policy_fn(state):
+#        action_values = self.one_step_lookahead(state)
+#        return np.argmax(action_values)
+#
+# 3. Implemented `train_episode` in `AsynchVI` class:
+#
+#    def train_episode(self):
+#        if self.pq.isEmpty():
+#            return
+#
+#        state = self.pq.pop()
+#        old_value = self.V[state]
+#        best_action_value = np.max(self.one_step_lookahead(state))
+#        self.V[state] = best_action_value
+#
+#        delta = abs(old_value - best_action_value)
+#        if delta > 0:
+#            if state in self.pred:
+#                for predecessor in self.pred[state]:
+#                    pred_best_val = np.max(self.one_step_lookahead(predecessor))
+#                    priority = -abs(self.V[predecessor] - pred_best_val)
+#                    self.pq.update(predecessor, priority)
+# ==========================================================================================
 class ValueIteration(AbstractSolver):
     def __init__(self, env, eval_env, options):
         assert str(env.observation_space).startswith("Discrete"), (
@@ -63,9 +118,6 @@ class ValueIteration(AbstractSolver):
         """
 
         # you can add variables here if it is helpful
-                
-        # A new value function to prevent in-place updates during the sweep
-        V_new = np.copy(self.V)
 
         # Update the estimated value of each state
         for each_state in range(self.env.observation_space.n):
@@ -75,10 +127,7 @@ class ValueIteration(AbstractSolver):
             #   YOUR IMPLEMENTATION HERE   #
             ################################
             action_values = self.one_step_lookahead(each_state)
-            V_new[each_state] = np.max(action_values)
-
-        # Update the class's value function with the new values
-        self.V = V_new
+            self.V[each_state] = np.max(action_values)
 
         # Dont worry about this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
