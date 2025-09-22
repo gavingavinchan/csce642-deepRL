@@ -227,17 +227,6 @@ class AsynchVI(ValueIteration):
                             except KeyError:
                                 self.pred[next_state] = set()
 
-    def _rebuild_priorities_from_current_V(self):
-        """Recompute H(s) for all states using the *current* self.V and rebuild the PQ.
-        H(s) = | V(s) - max_a [ R(s,a) + γ Σ_{s'} P(s'|s,a) V(s') ] |
-        """
-        self.pq = PriorityQueue()
-        for s in range(self.env.observation_space.n):
-            best_action_value = np.max(self.one_step_lookahead(s))
-            residual = abs(self.V[s] - best_action_value)
-            # more-negative == higher priority (min-heap)
-            self.pq.push(s, -residual)
-
     def train_episode(self):
         """
         What is this?
@@ -263,8 +252,14 @@ class AsynchVI(ValueIteration):
         # Update the value function. Ref: Sutton book eq. 4.10. #
         #########################################################
 
-        # Ensure priorities reflect the *current* self.V (tests overwrite V before calling us)
-        self._rebuild_priorities_from_current_V()
+        # Rebuild priorities from the *current* self.V so tests that set solver.V are respected.
+        # H(s) = | V(s) - max_a [ R(s,a) + γ Σ_{s'} P(s'|s,a) V(s') ] |
+        self.pq = PriorityQueue()
+        for s in range(self.env.observation_space.n):
+            best_action_value = np.max(self.one_step_lookahead(s))
+            residual = abs(self.V[s] - best_action_value)
+            # more-negative == higher priority (min-heap)
+            self.pq.push(s, -residual)
 
         # If priority queue is empty, nothing to do for this episode
         if self.pq.isEmpty():
@@ -273,27 +268,32 @@ class AsynchVI(ValueIteration):
             self.statistics[Statistics.Steps.value] = -1
             return
 
-        # Pop the single highest-priority state (more-negative priority == higher priority)
-        s = self.pq.pop()
+        # Pop the single highest-priority state (most negative priority)
+        state = self.pq.pop()
 
-        # In-place Bellman update on that state
-        old_val = self.V[s]
-        best_action_value = np.max(self.one_step_lookahead(s))
-        self.V[s] = best_action_value
+        # One-step lookahead + in-place Bellman update on that state
+        old_value = self.V[state]
+        best_action_value = np.max(self.one_step_lookahead(state))
+        self.V[state] = best_action_value
 
-        # Recompute H for predecessors only (SDS(s))
-        if abs(old_val - best_action_value) > 0 and s in self.pred:
-            for s_pred in self.pred[s]:
-                pred_best = np.max(self.one_step_lookahead(s_pred))
-                residual = abs(self.V[s_pred] - pred_best)
-                self.pq.update(s_pred, -residual)
+        # If this state's value changed, update the priority of its predecessors only (SDS(state))
+        delta = abs(old_value - best_action_value)
+        if delta > 0 and state in self.pred:
+            for predecessor in self.pred[state]:
+                pred_best_val = np.max(self.one_step_lookahead(predecessor))
+                priority = -abs(self.V[predecessor] - pred_best_val)
+                self.pq.update(predecessor, priority)
 
         # you can ignore this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
         self.statistics[Statistics.Steps.value] = -1
 
+
     def __str__(self):
         return "Asynchronous VI"
+
+
+
 
 
 
