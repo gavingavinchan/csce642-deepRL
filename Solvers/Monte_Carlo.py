@@ -64,7 +64,31 @@ class MonteCarlo(AbstractSolver):
         discount_factor = self.options.gamma
         ################################
         #   YOUR IMPLEMENTATION HERE   #
+
+        # --- generate one full episode following the current epsilon-soft policy ---
+        for _ in range(self.options.steps):
+            probs = self.policy(state)  # soft policy for a given state
+            action = np.random.choice(np.arange(len(probs)), p=probs)  # sample action
+            next_state, reward, done, _ = self.step(action)  # advance one step in the environment
+            episode.append((state, action, reward))  # memorize transition
+            state = next_state
+            if done:
+                break
+
+        # --- first-visit MC return computation and Q update ---
+        G = 0.0
+        visited = set()  # track first occurrence of (state, action)
+        for t in reversed(range(len(episode))):  # Loop for each step of episode, backwards
+            s_t, a_t, r_tp1 = episode[t]
+            G = discount_factor * G + r_tp1  # G <- γG + R_{t+1}
+            if (s_t, a_t) not in visited:  # Unless the pair (S_t, A_t) appears earlier in the episode
+                visited.add((s_t, a_t))
+                self.returns_sum[(s_t, a_t)] += G
+                self.returns_count[(s_t, a_t)] += 1.0
+                # Q(S_t, A_t) <- average(Returns(S_t, A_t))
+                self.Q[s_t][a_t] = self.returns_sum[(s_t, a_t)] / self.returns_count[(s_t, a_t)]
         ################################
+
 
     def __str__(self):
         return "Monte Carlo"
@@ -89,6 +113,15 @@ class MonteCarlo(AbstractSolver):
         def policy_fn(observation):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
+            
+            # Epsilon-soft action probabilities for the given observation
+            nA = self.env.action_space.n
+            eps = self.options.epsilon
+            action_probs = np.ones(nA, dtype=float) * (eps / nA)
+            best_action = int(np.argmax(self.Q[observation]))  # A* <- argmax_a Q(S_t, a)
+            action_probs[best_action] += (1.0 - eps)  # π(a|S_t)
+            return action_probs
+
             ################################
 
         return policy_fn
@@ -108,6 +141,10 @@ class MonteCarlo(AbstractSolver):
         def policy_fn(state):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
+
+            # Return the greedy action index: argmax over Q[state]
+            return int(np.argmax(self.Q[state]))  # np.argmax(self.Q[state]): action with highest q value
+
             ################################
 
 
