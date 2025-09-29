@@ -1,6 +1,6 @@
 # Licensing Information:  You are free to use or extend this codebase for
 # educational purposes provided that (1) you do not distribute or publish
-# solutions, (2) you retain this notice, and (3) inform Guni Sharon at 
+# solutions, (2) you retain this notice, and (3) inform Guni Sharon at
 # guni@tamu.edu regarding your usage (relevant statistics is reported to NSF).
 # The development of this assignment was supported by NSF (IIS-2238979).
 # Contributors:
@@ -53,7 +53,7 @@ class MonteCarlo(AbstractSolver):
             train_episode is called multiple times from run.py. Within
             train_episode you need to store the transitions in 1 complete
             trajectory/episode. Then using the transitions in that episode,
-            update the Q-function. Set Q-values as the (simple) average return for 
+            update the Q-function. Set Q-values as the (simple) average return for
             visited states over all sampled episodes
         """
 
@@ -64,31 +64,8 @@ class MonteCarlo(AbstractSolver):
         discount_factor = self.options.gamma
         ################################
         #   YOUR IMPLEMENTATION HERE   #
-
-        # --- generate one full episode following the current epsilon-soft policy ---
-        for _ in range(self.options.steps):
-            probs = self.policy(state)  # soft policy for a given state
-            action = np.random.choice(np.arange(len(probs)), p=probs)  # sample action
-            next_state, reward, done, _ = self.step(action)  # advance one step in the environment
-            episode.append((state, action, reward))  # memorize transition
-            state = next_state
-            if done:
-                break
-
-        # --- first-visit MC return computation and Q update ---
-        G = 0.0
-        visited = set()  # track first occurrence of (state, action)
-        for t in reversed(range(len(episode))):  # Loop for each step of episode, backwards
-            s_t, a_t, r_tp1 = episode[t]
-            G = discount_factor * G + r_tp1  # G <- γG + R_{t+1}
-            if (s_t, a_t) not in visited:  # Unless the pair (S_t, A_t) appears earlier in the episode
-                visited.add((s_t, a_t))
-                self.returns_sum[(s_t, a_t)] += G
-                self.returns_count[(s_t, a_t)] += 1.0
-                # Q(S_t, A_t) <- average(Returns(S_t, A_t))
-                self.Q[s_t][a_t] = self.returns_sum[(s_t, a_t)] / self.returns_count[(s_t, a_t)]
         ################################
-
+        pass
 
     def __str__(self):
         return "Monte Carlo"
@@ -113,16 +90,8 @@ class MonteCarlo(AbstractSolver):
         def policy_fn(observation):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
-            
-            # Epsilon-soft action probabilities for the given observation
-            nA = self.env.action_space.n
-            eps = self.options.epsilon
-            action_probs = np.ones(nA, dtype=float) * (eps / nA)
-            best_action = int(np.argmax(self.Q[observation]))  # A* <- argmax_a Q(S_t, a)
-            action_probs[best_action] += (1.0 - eps)  # π(a|S_t)
-            return action_probs
-
             ################################
+            pass
 
         return policy_fn
 
@@ -141,12 +110,8 @@ class MonteCarlo(AbstractSolver):
         def policy_fn(state):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
-
-            # Return the greedy action index: argmax over Q[state]
-            return int(np.argmax(self.Q[state]))  # np.argmax(self.Q[state]): action with highest q value
-
             ################################
-
+            return np.argmax(self.Q[state])
 
         return policy_fn
 
@@ -200,56 +165,66 @@ class OffPolicyMC(MonteCarlo):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-
-        # Generate an episode using the behavior policy b
-        gamma = self.options.gamma
-
-        # Create one full episode following the (soft) behavior policy
+        # Generate an episode by following the behavior policy
         for _ in range(self.options.steps):
-            probs = self.behavior_policy(state)                 # b(·|s)
+            probs = self.behavior_policy(state)
             action = np.random.choice(np.arange(len(probs)), p=probs)
-            new_state, reward, done, _ = self.step(action)      # advance one step in the environment
-            episode.append((state, action, reward))             # memorize transition
-            state = new_state
+
+            # --- FIX STARTS HERE ---
+            # Use the solver's step method, not the environment's directly.
+            # This handles state management and statistics tracking.
+            try:
+                # new gym api
+                (
+                    next_state,
+                    reward,
+                    terminated,
+                    truncated,
+                    _,
+                ) = self.step(action)
+                done = terminated or truncated
+            except ValueError:
+                # old gym api
+                next_state, reward, done, _ = self.step(action)
+            # --- FIX ENDS HERE ---
+
+            episode.append((state, action, reward))
             if done:
                 break
+            state = next_state
 
-        # Weighted Importance Sampling updates (iterate backwards)
-        G = 0.0
-        W = 1.0
-        for t in reversed(range(len(episode))):
-            s_t, a_t, r_tp1 = episode[t]
+        G = 0.0  # Sum of discounted rewards
+        W = 1.0  # Importance sampling ratio
+        gamma = self.options.gamma
 
-            # G <- γG + R_{t+1}
-            G = gamma * G + r_tp1
+        # Process the episode in reverse order
+        for t in range(len(episode) - 1, -1, -1):
+            state, action, reward = episode[t]
+            # Update the return
+            G = gamma * G + reward
 
-            # C(S_t, A_t) <- C(S_t, A_t) + W
-            self.C[s_t][a_t] += W
+            # Update C and Q using weighted importance sampling
+            self.C[state][action] += W
+            self.Q[state][action] += (
+                W / self.C[state][action]
+            ) * (G - self.Q[state][action])
 
-            # Q(S_t, A_t) <- Q(S_t, A_t) + (W / C(S_t, A_t)) * [G - Q(S_t, A_t)]
-            self.Q[s_t][a_t] += (W / self.C[s_t][a_t]) * (G - self.Q[s_t][a_t])
+            # Get the greedy action under the target policy
+            target_action = self.target_policy(state)
 
-            # π(S_t) <- argmax_a Q(S_t, a)   (with ties broken consistently)
-            greedy_action = int(np.argmax(self.Q[s_t]))
-
-            # If A_t != π(S_t) then exit inner Loop (proceed to next episode)
-            if a_t != greedy_action:
+            # If the action taken by the behavior policy is not the one
+            # the target policy would have taken, then the probability of this
+            # trajectory under the target policy is 0.
+            # The importance sampling ratio for all previous steps will be 0.
+            if action != target_action:
                 break
 
-            # W <- W * 1 / b(A_t | S_t)
-            b_prob = self.behavior_policy(s_t)[a_t]
-            if b_prob == 0.0:                                  # safety against division by zero
-                break
-            W = W / b_prob
-
-        # NOTE: do NOT return anything from this method (the grader expects None)
-
-
-
-
-        ################################
-
-        
+            # Update the importance sampling ratio
+            # W = W * pi(a|s) / b(a|s)
+            # pi(a|s) is 1 for the greedy policy (since action == target_action)
+            # b(a|s) is given by the behavior policy
+            behavior_prob = self.behavior_policy(state)[action]
+            W = W / behavior_prob
 
     def create_random_policy(self):
         """
