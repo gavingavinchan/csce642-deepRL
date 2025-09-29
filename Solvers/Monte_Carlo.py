@@ -200,6 +200,55 @@ class OffPolicyMC(MonteCarlo):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+
+        # Generate an episode using the behavior policy b
+        gamma = self.options.gamma
+
+        # Create one full episode following the (soft) behavior policy
+        for _ in range(self.options.steps):
+            probs = self.behavior_policy(state)                 # b(·|s)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
+            new_state, reward, done, _ = self.step(action)      # advance one step in the environment
+            episode.append((state, action, reward))             # memorize transition
+            state = new_state
+            if done:
+                break
+
+        # Weighted Importance Sampling updates (iterate backwards)
+        G = 0.0
+        W = 1.0
+        for t in reversed(range(len(episode))):
+            s_t, a_t, r_tp1 = episode[t]
+
+            # G <- γG + R_{t+1}
+            G = gamma * G + r_tp1
+
+            # C(S_t, A_t) <- C(S_t, A_t) + W
+            self.C[s_t][a_t] += W
+
+            # Q(S_t, A_t) <- Q(S_t, A_t) + (W / C(S_t, A_t)) * [G - Q(S_t, A_t)]
+            self.Q[s_t][a_t] += (W / self.C[s_t][a_t]) * (G - self.Q[s_t][a_t])
+
+            # π(S_t) <- argmax_a Q(S_t, a)   (with ties broken consistently)
+            greedy_action = int(np.argmax(self.Q[s_t]))
+
+            # If A_t != π(S_t) then exit inner Loop (proceed to next episode)
+            if a_t != greedy_action:
+                break
+
+            # W <- W * 1 / b(A_t | S_t)
+            b_prob = self.behavior_policy(s_t)[a_t]
+            if b_prob == 0.0:                                  # safety against division by zero
+                break
+            W = W / b_prob
+
+        # NOTE: do NOT return anything from this method (the grader expects None)
+
+
+
+
+        ################################
+
         
 
     def create_random_policy(self):
