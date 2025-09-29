@@ -39,33 +39,46 @@ class MonteCarlo(AbstractSolver):
     def train_episode(self):
         """
         Run a single episode for (first visit) Monte Carlo Control using Epsilon-Greedy policies.
-
-        Use:
-            self.options.env: OpenAI gym environment.
-            self.options.steps: steps per episode
-            probs = self.policy(state): soft policy for a given state
-            np.random.choice(np.arange(len(probs)), p=probs): random index
-                from the given distribution 'probs'
-            self.options.gamma: Gamma discount factor.
-            next_state, reward, done, _ = self.step(action): advance one step in the environment
-
-        Note:
-            train_episode is called multiple times from run.py. Within
-            train_episode you need to store the transitions in 1 complete
-            trajectory/episode. Then using the transitions in that episode,
-            update the Q-function. Set Q-values as the (simple) average return for
-            visited states over all sampled episodes
         """
-
         # Generate an episode.
         # An episode is an array of (state, action, reward) tuples
         episode = []
         state, _ = self.env.reset()
-        discount_factor = self.options.gamma
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-        pass
+        # Generate one complete episode
+        for _ in range(self.options.steps):
+            probs = self.policy(state)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
+            # --- FIX: Unpack 4 values, not 5 ---
+            next_state, reward, done, _ = self.step(action)
+            episode.append((state, action, reward))
+            if done:
+                break
+            state = next_state
+
+        # First-visit MC updates (by state-action)
+        G = 0.0
+        gamma = self.options.gamma
+        # set of (state, action) pairs visited in this episode
+        visited_sa = set()
+
+        # Iterate backwards through the episode
+        for t in range(len(episode) - 1, -1, -1):
+            s_t, a_t, r_t = episode[t]
+            G = gamma * G + r_t
+            sa_pair = (s_t, a_t)
+
+            # If this is the first time we've seen this (state, action) pair
+            # in this episode (iterating backwards), then update Q
+            if sa_pair not in visited_sa:
+                visited_sa.add(sa_pair)
+                self.returns_sum[sa_pair] += G
+                self.returns_count[sa_pair] += 1.0
+                self.Q[s_t][a_t] = (
+                    self.returns_sum[sa_pair] / self.returns_count[sa_pair]
+                )
 
     def __str__(self):
         return "Monte Carlo"
@@ -73,38 +86,24 @@ class MonteCarlo(AbstractSolver):
     def make_epsilon_greedy_policy(self):
         """
         Creates an epsilon-greedy policy based on a given Q-estimates and epsilon.
-
-        Use:
-            self.Q: A dictionary that maps from state -> action-values.
-                Each value is a numpy array of length nA
-            self.options.epsilon: Chance the sample a random action. Float betwen 0 and 1.
-            self.env.action_space.n: Number of actions in the environment.
-
-        Returns:
-            A function that takes the observation as an argument and returns
-            the probabilities for each action in the form of a numpy array of length nA.
-
         """
         nA = self.env.action_space.n
+        epsilon = self.options.epsilon
 
         def policy_fn(observation):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            pass
+            A = np.ones(nA, dtype=float) * epsilon / nA
+            best_action = np.argmax(self.Q[observation])
+            A[best_action] += 1.0 - epsilon
+            return A
 
         return policy_fn
 
     def create_greedy_policy(self):
         """
         Creates a greedy (soft) policy based on Q values.
-
-        Returns:
-            A function that takes an observation as input and returns a greedy
-            action
-
-        Use:
-            np.argmax(self.Q[state]): action with highest q value
         """
 
         def policy_fn(state):
@@ -127,41 +126,17 @@ class MonteCarlo(AbstractSolver):
 
 class OffPolicyMC(MonteCarlo):
     def __init__(self, env, eval_env, options):
-        assert str(env.action_space).startswith("Discrete") or str(
-            env.action_space
-        ).startswith("Tuple(Discrete"), (
-            str(self) + " cannot handle non-discrete action spaces"
-        )
         super().__init__(env, eval_env, options)
-
-        # The cumulative denominator of the weighted importance sampling formula
-        # (across all episodes)
         self.C = defaultdict(lambda: np.zeros(env.action_space.n))
-
-        # Our greedily policy we want to learn about
         self.target_policy = self.create_greedy_policy()
-        # Our behavior policy we want to learn from
         self.behavior_policy = self.create_random_policy()
 
     def train_episode(self):
         """
         Run a single episode of Monte Carlo Control Off-Policy Control using Weighted Importance Sampling.
-
-        Use:
-            elf.env: OpenAI environment.
-            self.options.steps: steps per episode
-            self.behavior_policy(state): returns a soft policy which is the
-                behavior policy (act according to this policy)
-            episode.append((state, action, reward)): memorize a transition
-            self.options.gamma: Gamma discount factor.
-            new_state, reward, done, _ = self.step(action): To advance one step in the environment
-            self.C[state][action]: weighted importance sampling formula denominator
-            self.Q[state][action]: q value for ('state', 'action')
         """
         episode = []
-        # Reset the environment
         state, _ = self.env.reset()
-
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
@@ -169,25 +144,8 @@ class OffPolicyMC(MonteCarlo):
         for _ in range(self.options.steps):
             probs = self.behavior_policy(state)
             action = np.random.choice(np.arange(len(probs)), p=probs)
-
-            # --- FIX STARTS HERE ---
-            # Use the solver's step method, not the environment's directly.
-            # This handles state management and statistics tracking.
-            try:
-                # new gym api
-                (
-                    next_state,
-                    reward,
-                    terminated,
-                    truncated,
-                    _,
-                ) = self.step(action)
-                done = terminated or truncated
-            except ValueError:
-                # old gym api
-                next_state, reward, done, _ = self.step(action)
-            # --- FIX ENDS HERE ---
-
+            # --- FIX: Unpack 4 values, not 5 ---
+            next_state, reward, done, _ = self.step(action)
             episode.append((state, action, reward))
             if done:
                 break
@@ -200,42 +158,27 @@ class OffPolicyMC(MonteCarlo):
         # Process the episode in reverse order
         for t in range(len(episode) - 1, -1, -1):
             state, action, reward = episode[t]
-            # Update the return
             G = gamma * G + reward
 
             # Update C and Q using weighted importance sampling
             self.C[state][action] += W
-            self.Q[state][action] += (
-                W / self.C[state][action]
-            ) * (G - self.Q[state][action])
+            self.Q[state][action] += (W / self.C[state][action]) * (
+                G - self.Q[state][action]
+            )
 
-            # Get the greedy action under the target policy
             target_action = self.target_policy(state)
 
-            # If the action taken by the behavior policy is not the one
-            # the target policy would have taken, then the probability of this
-            # trajectory under the target policy is 0.
-            # The importance sampling ratio for all previous steps will be 0.
             if action != target_action:
                 break
 
-            # Update the importance sampling ratio
-            # W = W * pi(a|s) / b(a|s)
-            # pi(a|s) is 1 for the greedy policy (since action == target_action)
-            # b(a|s) is given by the behavior policy
             behavior_prob = self.behavior_policy(state)[action]
+            if behavior_prob == 0:  # Avoid division by zero
+                break
             W = W / behavior_prob
 
     def create_random_policy(self):
         """
         Creates a random policy function.
-
-        Use:
-            self.env.action_space.n: Number of actions in the environment.
-
-        Returns:
-            A function that takes an observation as input and returns a vector
-            of action probabilities
         """
         nA = self.env.action_space.n
         A = np.ones(nA, dtype=float) / nA
