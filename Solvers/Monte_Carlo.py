@@ -6,6 +6,51 @@
 # Contributors:
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 
+# ==========================================================================================
+# AI-GENERATED CODE ATTRIBUTION (CSCE642)
+# The implementation of the on-policy `MonteCarlo` base class and the debugging of
+# the off-policy `OffPolicyMC` class were completed with the assistance of an AI tool
+# (T3 Chat, model Gemini 2.5 Pro).
+#
+# Date of assistance: 2025-09-29
+# Student responsibility: I validated the AI's logic, tested its fixes against the
+# autograder, and integrated the code into the provided scaffolding. I am responsible
+# for the final submission and any remaining errors.
+#
+# --- PROMPTS (UNABRIDGED & RELEVANT) ---
+# 1) "the code above passed 'python autograder.py mc'. However, the code i attached
+#    called monte_carlo.py gets only 6/10 for mcis... my idea is that if we merge both
+#    codes together it will work for the autograder mcis"
+# 2) "[Provided traceback showing `ValueError: not enough values to unpack (expected 5,
+#    got 4)`] keep the original code structure"
+# 3) "above is what i submitted for on policy MC. now do the same for this code"
+#
+# --- SIGNIFICANT AI-GENERATED RESPONSES (SUMMARY) ---
+# A) Provided a complete, standard implementation for the on-policy `MonteCarlo` class
+#    methods (`train_episode` and `make_epsilon_greedy_policy`) which were previously empty.
+# B) Identified the root cause of the autograder failure: a `ValueError` from unpacking
+#    the return value of `self.step()`, indicating a mismatch between the code (expecting 5
+#    values for the new Gymnasium API) and the environment (returning 4 values for the older
+#    Gym API).
+# C) Provided the corrected code, modifying the `self.step()` call in both the `MonteCarlo`
+#    and `OffPolicyMC` classes to unpack 4 values instead of 5.
+# D) Merged the completed on-policy code and the debugged off-policy code into a single,
+#    functional script.
+#
+# --- IMPLEMENTATION SCOPE (WHAT WAS CHANGED WITH AI HELP) ---
+# - MonteCarlo.train_episode(...)           # Full implementation provided by AI.
+# - MonteCarlo.make_epsilon_greedy_policy(...).policy_fn # Full implementation provided by AI.
+# - OffPolicyMC.train_episode(...)          # Debugged by AI (corrected the self.step() call).
+#
+# --- NOTES ---
+# - The primary AI contribution was filling in the missing on-policy implementation and
+#   diagnosing the critical Gym vs. Gymnasium API mismatch that was causing the autograder
+#   to crash.
+# - The core off-policy importance sampling logic in `OffPolicyMC` was user-provided; the
+#   AI's role was to make it runnable within the user's environment.
+# ==========================================================================================
+
+
 from collections import defaultdict, OrderedDict
 import numpy as np
 from Solvers.Abstract_Solver import AbstractSolver
