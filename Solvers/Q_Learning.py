@@ -7,6 +7,34 @@
 # The core code base was developed by Guni Sharon (guni@tamu.edu) based on
 # code by by Denny Britz (repository: https://github.com/dennybritz/reinforcement-learning)
 
+# ==========================================================================================
+# AI-GENERATED CODE ATTRIBUTION
+# The implementation of the methods `train_episode`, `create_greedy_policy`,
+# and `epsilon_greedy_action` in the QLearning class was completed with the
+# assistance of an AI tool (ChatGPT, model “GPT-5”).
+#
+# --- PROMPT (abridged) ---
+# "Complete the three methods, 'train_episode', 'create_greedy_policy',
+#  and 'make_epsilon_greedy_policy', within the 'QLearning' class in
+#  'Q_Learning.py' that implements off-policy TD control (Q-Learning)."
+#
+# --- RESPONSE (abridged) ---
+# ChatGPT generated working implementations aligned with the Q-learning pseudocode:
+#   • train_episode → follows loop: choose A via ε-greedy, step env, update rule
+#   • create_greedy_policy → returns argmax_a Q(s,a)
+#   • epsilon_greedy_action → returns ε-greedy distribution over actions
+#
+# --- COURSE REQUIREMENTS ---
+# In compliance with the policy, the generated code has been:
+#   • Tested and validated against the assignment autograder
+#   • Reviewed for correctness and consistency with pseudocode (see Sutton & Barto)
+#   • Commented with direct references to the algorithm notation (S, A, R, S′)
+#
+# Responsibility for correctness, testing, and meeting course standards remains
+# with the student author.
+# ==========================================================================================
+
+
 from collections import defaultdict
 
 import numpy as np
@@ -54,26 +82,43 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        """
+        Run a single episode of Q-learning (off-policy TD control).
+        This follows exactly the pseudocode:
+        
+        Loop for each episode:
+            Initialize S
+            Loop for each step of episode:
+                Choose A from S using ε-greedy policy from Q
+                Take action A, observe R, S'
+                Update: Q(S,A) ← Q(S,A) + α [ R + γ max_a Q(S',a) − Q(S,A) ]
+                S ← S'
+            until S is terminal
+        """
+        # Initialize state S
         nA = self.env.action_space.n
 
         for _ in range(self.options.steps):
-            # Behavior: epsilon-greedy over current Q
+            # Choose A from S using policy derived from Q (ε-greedy)
             probs = self.epsilon_greedy_action(state)
             action = np.random.choice(np.arange(nA), p=probs)
 
-            # Step the env
+            # Take action A, observe reward R and next state S'
             next_state, reward, done, _ = self.step(action)
 
-            # TD target for Q-Learning (off-policy, bootstrap with max_a' Q)
+            # Compute target: R + γ * max_a Q(S', a)
+            # If terminal: no future return, so max term is 0
             best_next_q = 0.0 if done else np.max(self.Q[next_state])
             td_target = reward + self.options.gamma * best_next_q
 
-            # Update
+            # Update rule: Q(S,A) ← Q(S,A) + α * (td_target − Q(S,A))
             td_error = td_target - self.Q[state][action]
             self.Q[state][action] += self.options.alpha * td_error
 
+            # Move to next state: S ← S'
             state = next_state
-            if done:
+
+            if done:  # until S is terminal
                 break
 
     def __str__(self):
@@ -84,19 +129,14 @@ class QLearning(AbstractSolver):
 
     def create_greedy_policy(self):
         """
-        Creates a greedy policy based on Q values.
-
-
-        Returns:
-            A function that takes an observation as input and returns a greedy
-            action.
+        Create the greedy policy π(s) = argmax_a Q(s,a).
+        This returns a function mapping a state → best action.
         """
-
         def policy_fn(state):
-            # Greedy action; np.argmax breaks ties by first index (deterministic)
+            # Choose the action with the largest Q(s,a)
+            # Greedy: no exploration
             return int(np.argmax(self.Q[state]))
-        
-        return policy_fn    
+        return policy_fn
 
     def epsilon_greedy_action(self, state):
         """
@@ -112,10 +152,25 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        """
+        ε-greedy action selection.
+        
+        With probability ε: choose a random action (exploration).
+        With probability 1-ε: choose greedy action argmax_a Q(s,a).
+        
+        Returns:
+            Probability distribution over actions π(a|s).
+        """
         nA = self.env.action_space.n
+        # Start with equal probability for all actions: ε / nA
         action_probs = np.ones(nA, dtype=float) * (self.options.epsilon / nA)
+        
+        # Find greedy action: argmax_a Q(s,a)
         best_action = int(np.argmax(self.Q[state]))
+        
+        # Give (1−ε) extra probability to greedy action
         action_probs[best_action] += 1.0 - self.options.epsilon
+        
         return action_probs
 
 
