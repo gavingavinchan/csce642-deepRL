@@ -54,6 +54,27 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+
+        for _ in range(self.options.steps):
+            # Behavior: epsilon-greedy over current Q
+            probs = self.epsilon_greedy_action(state)
+            action = np.random.choice(np.arange(nA), p=probs)
+
+            # Step the env
+            next_state, reward, done, _ = self.step(action)
+
+            # TD target for Q-Learning (off-policy, bootstrap with max_a' Q)
+            best_next_q = 0.0 if done else np.max(self.Q[next_state])
+            td_target = reward + self.options.gamma * best_next_q
+
+            # Update
+            td_error = td_target - self.Q[state][action]
+            self.Q[state][action] += self.options.alpha * td_error
+
+            state = next_state
+            if done:
+                break
 
     def __str__(self):
         return "Q-Learning"
@@ -72,12 +93,10 @@ class QLearning(AbstractSolver):
         """
 
         def policy_fn(state):
-            ################################
-            #   YOUR IMPLEMENTATION HERE   #
-            ################################
-            return -1
-
-        return policy_fn
+            # Greedy action; np.argmax breaks ties by first index (deterministic)
+            return int(np.argmax(self.Q[state]))
+        
+        return policy_fn    
 
     def epsilon_greedy_action(self, state):
         """
@@ -93,6 +112,11 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+        action_probs = np.ones(nA, dtype=float) * (self.options.epsilon / nA)
+        best_action = int(np.argmax(self.Q[state]))
+        action_probs[best_action] += 1.0 - self.options.epsilon
+        return action_probs
 
 
 class ApproxQLearning(QLearning):
