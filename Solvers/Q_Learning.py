@@ -201,6 +201,30 @@ class ApproxQLearning(QLearning):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+
+        for _ in range(self.options.steps):
+            # Select action using ε-greedy policy derived from the function approximator
+            action_probs = self.epsilon_greedy(state)
+            action = np.random.choice(np.arange(nA), p=action_probs)
+
+            # Step the environment
+            next_state, reward, done, _ = self.step(action)
+
+            # Bootstrap with max_a Q̂(S', a) when next state is non-terminal
+            if done:
+                td_target = reward
+            else:
+                q_next = self.estimator.predict(next_state)
+                td_target = reward + self.options.gamma * np.max(q_next)
+
+            # Update approximator towards TD target
+            self.estimator.update(state, action, td_target)
+
+            state = next_state
+
+            if done:
+                break
 
     def __str__(self):
         return "Approx Q-Learning"
@@ -219,6 +243,20 @@ class ApproxQLearning(QLearning):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+        epsilon = self.options.epsilon
+
+        # Start with exploration probability mass spread uniformly
+        action_probs = np.ones(nA, dtype=float) * (epsilon / nA)
+
+        # Greedy action w.r.t. current approximated Q-values
+        q_values = self.estimator.predict(state)
+        best_action = int(np.argmax(q_values))
+
+        # Assign remaining probability mass to the greedy action
+        action_probs[best_action] += 1.0 - epsilon
+
+        return action_probs
 
     def create_greedy_policy(self):
         """
@@ -228,13 +266,12 @@ class ApproxQLearning(QLearning):
             A function that takes a state as input and returns a greedy
             action.
         """
-        nA = self.env.action_space.n
-
         def policy_fn(state):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            return -1
+            q_values = self.estimator.predict(state)
+            return int(np.argmax(q_values))
             
 
         return policy_fn
