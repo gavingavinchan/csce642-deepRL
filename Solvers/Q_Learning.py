@@ -274,7 +274,7 @@ class Estimator:
         # Feature Preprocessing: Normalize to zero mean and unit variance
         # We use a few samples from the observation space to do this
         observation_examples = np.array(
-            [env.observation_space.sample() for x in range(10000)]
+            [env.observation_space.sample() for x in range(20000)]
         )
         self.scaler = sklearn.preprocessing.StandardScaler()
         self.scaler.fit(observation_examples)
@@ -283,10 +283,10 @@ class Estimator:
         # We use RBF kernels with different variances to cover different parts of the space
         self.featurizer = sklearn.pipeline.FeatureUnion(
             [
-                ("rbf1", RBFSampler(gamma=5.0, n_components=100)),
-                ("rbf2", RBFSampler(gamma=2.0, n_components=100)),
-                ("rbf3", RBFSampler(gamma=1.0, n_components=100)),
-                ("rbf4", RBFSampler(gamma=0.5, n_components=100)),
+                ("rbf1", RBFSampler(gamma=5.0, n_components=230)),
+                ("rbf2", RBFSampler(gamma=2.0, n_components=230)),
+                ("rbf3", RBFSampler(gamma=1.0, n_components=230)),
+                ("rbf4", RBFSampler(gamma=0.5, n_components=230)),
             ]
         )
         self.featurizer.fit(self.scaler.transform(observation_examples))
