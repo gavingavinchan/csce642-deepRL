@@ -10,12 +10,12 @@
 # ==========================================================================================
 # AI-GENERATED CODE ATTRIBUTION
 # The implementation of the methods `train_episode`, `create_greedy_policy`,
-# and `epsilon_greedy_action` in the QLearning class was completed with the
+# and `epsilon_greedy_action` in the ApproxQLearning class was completed with the
 # assistance of an AI tool (ChatGPT, model “GPT-5”).
 #
 # --- PROMPT (abridged) ---
 # "Complete the three methods, 'train_episode', 'create_greedy_policy',
-#  and 'make_epsilon_greedy_policy', within the 'QLearning' class in
+#  and 'make_epsilon_greedy_policy', within the 'ApproxQLearning' class in
 #  'Q_Learning.py' that implements off-policy TD control (Q-Learning)."
 #
 # --- RESPONSE (abridged) ---
@@ -274,7 +274,7 @@ class Estimator:
         # Feature Preprocessing: Normalize to zero mean and unit variance
         # We use a few samples from the observation space to do this
         observation_examples = np.array(
-            [env.observation_space.sample() for x in range(20000)]
+            [env.observation_space.sample() for x in range(10000)]
         )
         self.scaler = sklearn.preprocessing.StandardScaler()
         self.scaler.fit(observation_examples)
