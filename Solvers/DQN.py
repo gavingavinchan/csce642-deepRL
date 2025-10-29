@@ -7,6 +7,45 @@
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 # The PyTorch code was developed by Sheelabhadra Dey (sheelabhadra@tamu.edu).
 
+
+"""
+================================================================================
+AI-GENERATED CODE DOCUMENTATION
+================================================================================
+
+POLICY COMPLIANCE STATEMENT:
+This implementation includes code generated with the assistance of Claude 4.5 
+Haiku (Reasoning) AI model. This use is properly documented in accordance with 
+academic integrity policies.
+
+PROMPT SUBMITTED TO AI:
+"Complete the four methods, 'create_greedy_policy', 'epsilon_greedy', 
+'compute_target_values', and 'train_episode' within the 'DQN' class 
+implementing the DQN algorithm. The neural network is initialized in __init__ 
+and update_target_model() is provided. Must create a replay buffer of size 
+given by parameter '-m'. At each time step, take an action from epsilon-greedy 
+policy, record transition in memory, and update the online network. Apply 
+single update per step with minibatch of size '-b' from memory. Refresh target 
+network at interval equal to parameter '-N'."
+
+SIGNIFICANT PARTS OF AI RESPONSE USED:
+1. epsilon_greedy() method: Implementation of epsilon-greedy probability 
+   distribution calculation with torch tensor conversion
+2. compute_target_values() method: Target Q-value computation using Bellman 
+   equation with done flag masking
+3. train_episode() method: Overall episode loop structure with replay buffer 
+   integration and target network update scheduling
+
+VALIDATION AND TESTING:
+- Tested by running: python autograder.py dqn
+- All test cases passed including:
+  * test_epsilon_greedy: Verified correct probability distribution
+  * test_compute_target_values: Verified target value calculations
+  * test_cartpole_reward: Verified learning convergence on CartPole-v1
+
+================================================================================
+"""
+
 import random
 from copy import deepcopy
 from collections import deque
@@ -101,6 +140,23 @@ class DQN(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        # Convert state to tensor if needed
+        if not isinstance(state, torch.Tensor):
+            state = torch.as_tensor(state, dtype=torch.float32)
+        
+        # Get Q-values from the model
+        with torch.no_grad():
+            q_values = self.model(state)
+        
+        # Find the best action
+        best_action = torch.argmax(q_values).item()
+        
+        # Create epsilon-greedy probability distribution
+        num_actions = self.env.action_space.n
+        probabilities = np.ones(num_actions) * (self.options.epsilon / num_actions)
+        probabilities[best_action] += 1 - self.options.epsilon
+        
+        return probabilities
 
 
     def compute_target_values(self, next_states, rewards, dones):
@@ -113,6 +169,19 @@ class DQN(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        with torch.no_grad():
+            # Get Q-values for next states from target network
+            q_values_next = self.target_model(next_states)
+            # Get max Q-value for each next state
+            max_q_next = torch.max(q_values_next, dim=1)[0]
+            
+            # Compute target: r + gamma * max_a' Q_target(s', a') * (1 - done)
+            targets = (
+                rewards 
+                + self.options.gamma * max_q_next * (1 - dones)
+            )
+    
+        return targets
 
 
     def replay(self):
@@ -188,6 +257,31 @@ class DQN(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            # Get action from epsilon-greedy policy
+            action_probs = self.epsilon_greedy(state)
+            action = np.random.choice(
+                len(action_probs), 
+                p=action_probs
+            )
+            
+            # Take the action
+            next_state, reward, done, info = self.step(action)
+            
+            # Store transition in replay buffer
+            self.memorize(state, action, reward, next_state, done)
+            
+            # Update Q-network with experience replay
+            self.replay()
+            
+            # Increment step counter and update target network every N steps
+            self.n_steps += 1
+            if self.n_steps % self.options.update_target_estimator_every == 0:
+                self.update_target_model()
+            
+            state = next_state
+            
+            if done:
+                break
 
 
     def __str__(self):
