@@ -7,6 +7,25 @@
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 # The PyTorch code was developed by Sheelabhadra Dey (sheelabhadra@tamu.edu).
 
+# ==========================================================================================
+# AI-GENERATED CODE DOCUMENTATION
+# ------------------------------------------------------------------------------------------
+# PROMPT:
+#   "Complete the three methods, 'train_episode', 'compute_returns', and 'pg_loss',
+#    within the 'Reinforce' class in 'REINFORCE.py' implementing the 'REINFORCE'
+#    algorithm. A neural network has been initialized for you in the 'build_model'
+#    function. In 'train_episode', reset the environment, select an action by using the
+#    probabilities given by the neural network, and then at the conclusion of the episode
+#    update the network once using a batch containing all the transitions in the episode.
+#    In 'pg_loss' implement the loss function for policy gradient without any additional
+#    improvements such as importance sampling or gradient clipping."
+#
+# SIGNIFICANT AI-GENERATED CONTENT:
+#   - Reverse-time Monte Carlo return calculation in `compute_returns`.
+#   - Episode loop, action sampling, and single-batch update flow in `train_episode`.
+#   - Baseline-adjusted REINFORCE objective in `pg_loss`.
+# ==========================================================================================
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -73,9 +92,13 @@ class Reinforce(AbstractSolver):
         Returns:
             The per step return along an episode (as a list).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
+        returns = []
+        g = 0.0
+        for reward in reversed(rewards):
+            g = reward + gamma * g
+            returns.append(g)
+        returns.reverse()
+        return returns
 
     def select_action(self, state):
         """
@@ -133,11 +156,19 @@ class Reinforce(AbstractSolver):
         action_probs = []  # Action probability
         baselines = []  # Value function
         for _ in range(self.options.steps):
-            ################################
-            #   YOUR IMPLEMENTATION HERE   #
-            # Run update_model() only ONCE #
-            # at the END of an episode.    #
-            ################################
+            action, prob, baseline = self.select_action(state)
+            next_state, reward, done, _ = self.step(action)
+
+            rewards.append(reward)
+            action_probs.append(prob)
+            baselines.append(baseline)
+
+            state = next_state
+            if done:
+                break
+
+        if rewards:
+            self.update_model(rewards, action_probs, baselines)
 
 
     def pg_loss(self, advantage, prob):
@@ -156,9 +187,8 @@ class Reinforce(AbstractSolver):
         Returns:
             The unreduced loss (as a tensor).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
+        eps = 1e-8
+        return -(advantage * torch.log(prob + eps))
 
 
     def __str__(self):
